@@ -24,6 +24,8 @@ Things to know:
 
 ## Installation (HACS)
 
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=infestdead&repository=devireg-ha&category=integration)
+
 1. HACS > Integrations > ⋮ > Custom repositories, add this repo as *Integration*.
 2. Install **DEVIreg Smart** and restart Home Assistant.
 3. Settings > Devices & services > Add integration > **DEVIreg Smart**.
