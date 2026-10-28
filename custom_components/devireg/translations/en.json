@@ -1,0 +1,137 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pair with DEVIreg Smart",
+        "description": "In the DEVIsmart app, open Settings > Share house > Generate OTP and enter the code here. Keep the app open on that screen until pairing finishes. Home Assistant joins your house as another user, and every thermostat in the house is added.",
+        "data": {
+          "otp": "One-time code",
+          "user_name": "Name shown in the app"
+        }
+      }
+    },
+    "error": {
+      "invalid_otp": "The code was rejected or has expired. Generate a new one in the app and try again.",
+      "cannot_connect": "Could not reach the Danfoss cloud relay.",
+      "no_thermostats": "The shared house has no DEVIreg Smart thermostats.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This house is already configured."
+    }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "none": "None",
+              "home": "At home (until next period)",
+              "away": "Vacation",
+              "frost_protection": "Pause (frost protection)"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Room temperature"
+      },
+      "floor_temperature": {
+        "name": "Floor temperature"
+      },
+      "heating_time_7_days": {
+        "name": "Heating time (7 days)"
+      },
+      "heating_time_30_days": {
+        "name": "Heating time (30 days)"
+      },
+      "heating_time_total": {
+        "name": "Heating time (total)"
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
+      },
+      "relay_switch_count": {
+        "name": "Relay switch count"
+      },
+      "energy_7_days": {
+        "name": "Energy (7 days)"
+      },
+      "energy_30_days": {
+        "name": "Energy (30 days)"
+      },
+      "energy_total": {
+        "name": "Energy (total)"
+      },
+      "heater_power": {
+        "name": "Heater power"
+      }
+    },
+    "binary_sensor": {
+      "heating": {
+        "name": "Heating"
+      },
+      "window_open": {
+        "name": "Window open"
+      },
+      "sensor_disconnected": {
+        "name": "Sensor disconnected"
+      },
+      "sensor_short_circuit": {
+        "name": "Sensor short circuit"
+      },
+      "overheat": {
+        "name": "Overheat"
+      },
+      "unrecoverable_error": {
+        "name": "Unrecoverable error"
+      }
+    },
+    "switch": {
+      "window_detection": {
+        "name": "Open window detection"
+      },
+      "forecast": {
+        "name": "Forecast"
+      },
+      "screen_lock": {
+        "name": "Screen lock"
+      },
+      "min_floor_temperature_enabled": {
+        "name": "Minimum floor temperature"
+      }
+    },
+    "number": {
+      "comfort_temperature": {
+        "name": "Comfort temperature"
+      },
+      "economy_temperature": {
+        "name": "Economy temperature"
+      },
+      "manual_temperature": {
+        "name": "Manual temperature"
+      },
+      "away_temperature": {
+        "name": "Vacation temperature"
+      },
+      "frost_protection_temperature": {
+        "name": "Frost protection temperature"
+      },
+      "min_floor_temperature": {
+        "name": "Minimum floor temperature"
+      },
+      "max_floor_temperature": {
+        "name": "Maximum floor temperature"
+      },
+      "low_temperature_warning": {
+        "name": "Low temperature warning"
+      },
+      "display_brightness": {
+        "name": "Display brightness"
+      }
+    }
+  }
+}
