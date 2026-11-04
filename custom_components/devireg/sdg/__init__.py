@@ -1,8 +1,9 @@
 """Async Python client for the SecureDeviceGrid (SDG) protocol.
 
 A port of the client side of OpenSDG by Pavel Fedin (Sonic-Amiga):
-https://github.com/Sonic-Amiga/opensdg (GPL-3.0). SecureDeviceGrid is
-proprietary technology of Trifork; this code is for non-commercial use.
+https://github.com/Sonic-Amiga/opensdg (GPL-3.0). This code is licensed under
+GPL-3.0. SecureDeviceGrid is proprietary technology of Trifork; this project is
+not affiliated with or endorsed by Danfoss or Trifork.
 """
 
 from .errors import (

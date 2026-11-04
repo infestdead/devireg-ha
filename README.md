@@ -68,6 +68,10 @@ model, and the rest is Home Assistant glue.
 
 ## License
 
-GPL-3.0, matching OpenSDG. SecureDeviceGrid is proprietary technology of
-Trifork; this project is not affiliated with Danfoss and is for
-non-commercial use only.
+Licensed under the GNU General Public License v3.0 (see `LICENSE`).
+
+The SecureDeviceGrid client in `custom_components/devireg/sdg/` is a port of
+[OpenSDG](https://github.com/Sonic-Amiga/opensdg) by Pavel Fedin, also GPL-3.0.
+
+SecureDeviceGrid is proprietary technology of Trifork. This project is not
+affiliated with or endorsed by Danfoss or Trifork.
