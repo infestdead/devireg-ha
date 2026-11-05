@@ -254,9 +254,15 @@ class Grid:
             [(2, proto.LENGTH, peer_id.hex()), (3, proto.LENGTH, protocol)],
             timeout,
         )
-        return await Tunnel.open(
+        tunnel = await Tunnel.open(
             host, port, self._pk, self._sk, grid=False, tunnel_id=tunnel_id, timeout=timeout
         )
+        # The relay picks the endpoint; make sure it is the peer we asked for.
+        # OpenSDG does not check this.
+        if tunnel.remote_key != peer_id:
+            tunnel.close()
+            raise ProtocolError("Peer key does not match the requested peer ID")
+        return tunnel
 
     async def pair_remote(self, otp: str, timeout: float = 60) -> bytes:
         """Pair with the phone that generated the OTP; returns the phone's peer ID."""

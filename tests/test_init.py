@@ -65,6 +65,8 @@ async def test_setup_creates_entities(hass: HomeAssistant, socket_enabled) -> No
         + _packet(Code.SYSTEM_WINDOW_OPEN, b"\x01")
         + _packet(Code.GLOBAL_SOFTWAREREVISION, bytes([0x7F, 0x01]))
         + _packet(Code.GLOBAL_SERIALNUMBER, (10175249).to_bytes(4, "little"))
+        + _packet(Code.SYSTEM_HOUSE_NAME, bytes([7]) + b"My Flat")
+        + _packet(Code.SYSTEM_ROOM_NAME, bytes([8]) + b"Bathroom")
         # Installer setup with a 375 W heater (15 x 25 W), 10 h heater on-time
         + _packet(Code.SYSTEM_WIZARD_INFO, bytes([6, 1, 1, 0, 0, 15, 1]))
         + _packet(Code.SYSTEM_RUNTIME_INFO_RELAY_ON_TIME, (36000).to_bytes(4, "little"))
@@ -109,6 +111,18 @@ async def test_setup_creates_entities(hass: HomeAssistant, socket_enabled) -> No
         device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, thermostat.peer_id)})
         assert device.sw_version == "1.127"
         assert device.serial_number == "10175249"
+
+        from custom_components.devireg.diagnostics import async_get_config_entry_diagnostics
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+        thermostat_diag = diagnostics["thermostats"][0]
+        assert thermostat_diag["connected"] is True
+        assert thermostat_diag["name"] == "**REDACTED**"
+        assert thermostat_diag["values"]["GLOBAL_SERIALNUMBER"] == "**REDACTED**"
+        assert "10175249" not in str(diagnostics)
+        assert "Bathroom" not in str(diagnostics)
+        assert "My Flat" not in str(diagnostics)
+        assert entry.data["private_key"] not in str(diagnostics)
 
         await hass.services.async_call(
             "climate", "set_temperature",

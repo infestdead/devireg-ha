@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import os
 
+import pytest
+
 from nacl.bindings import crypto_secretbox
 
 from custom_components.devireg import dominion
 from custom_components.devireg.api import DeviRegHouse, Room
 from custom_components.devireg.dominion import Code, ControlState
-from custom_components.devireg.sdg import generate_private_key, proto
+from custom_components.devireg.sdg import Grid, ProtocolError, generate_private_key, proto
 from custom_components.devireg.sdg.crypto import xsalsa20_xor
 
 from .fake_sdg import FakeGrid, FakeThermostat
@@ -106,4 +108,21 @@ async def test_house_end_to_end(socket_enabled) -> None:
         ) + dominion.write_byte(Code.SCHEDULER_CONTROL_MODE, 6)
     finally:
         await house.stop()
+        await grid.stop()
+
+
+async def test_connect_to_peer_rejects_wrong_key(socket_enabled) -> None:
+    """A relay that hands us a different endpoint than the peer we asked for is refused."""
+    thermostat = FakeThermostat(b"")
+    grid = FakeGrid(thermostat)
+    servers = await grid.start()
+    client = Grid(generate_private_key(), servers)
+    try:
+        await client.connect()
+        with pytest.raises(ProtocolError):
+            await client.connect_to_peer(bytes(32), "dominion-1.0")
+        tunnel = await client.connect_to_peer(bytes.fromhex(thermostat.peer_id), "dominion-1.0")
+        tunnel.close()
+    finally:
+        await client.close()
         await grid.stop()
