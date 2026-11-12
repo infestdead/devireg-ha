@@ -123,6 +123,9 @@ async def test_connect_to_peer_rejects_wrong_key(socket_enabled) -> None:
             await client.connect_to_peer(bytes(32), "dominion-1.0")
         tunnel = await client.connect_to_peer(bytes.fromhex(thermostat.peer_id), "dominion-1.0")
         tunnel.close()
+        # The phone's configuration tunnel is opened without the check (issue #1)
+        tunnel = await client.connect_to_peer(bytes(32), "dominion-1.0", verify_peer=False)
+        tunnel.close()
     finally:
         await client.close()
         await grid.stop()

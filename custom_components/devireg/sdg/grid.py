@@ -246,9 +246,16 @@ class Grid:
         return server[1].decode(), server[2], peer[5]
 
     async def connect_to_peer(
-        self, peer_id: bytes, protocol: str, timeout: float = DEFAULT_TIMEOUT
+        self,
+        peer_id: bytes,
+        protocol: str,
+        timeout: float = DEFAULT_TIMEOUT,
+        verify_peer: bool = True,
     ) -> Tunnel:
-        """Open a tunnel to a peer (thermostat or phone)."""
+        """Open a tunnel to a peer (thermostat or phone).
+
+        With verify_peer, the key the peer presents must equal peer_id.
+        """
         host, port, tunnel_id = await self._request(
             MSG_CALL_REMOTE,
             [(2, proto.LENGTH, peer_id.hex()), (3, proto.LENGTH, protocol)],
@@ -259,7 +266,12 @@ class Grid:
         )
         # The relay picks the endpoint; make sure it is the peer we asked for.
         # OpenSDG does not check this.
-        if tunnel.remote_key != peer_id:
+        if verify_peer and tunnel.remote_key != peer_id:
+            _LOGGER.debug(
+                "Peer key mismatch: asked for %s…, got %s…",
+                peer_id.hex()[:8],
+                tunnel.remote_key.hex()[:8],
+            )
             tunnel.close()
             raise ProtocolError("Peer key does not match the requested peer ID")
         return tunnel
@@ -301,7 +313,12 @@ class Grid:
         self, phone_id: bytes, user_name: str, timeout: float = 60
     ) -> dict[str, Any]:
         """Ask the paired phone to share its house configuration."""
-        tunnel = await self.connect_to_peer(phone_id, PROTOCOL_CONFIGURATION)
+        # The phone does not present the key it paired with on this tunnel
+        # (issue #1), so it cannot be checked like a thermostat. The pairing
+        # itself was verified with the OTP.
+        tunnel = await self.connect_to_peer(
+            phone_id, PROTOCOL_CONFIGURATION, verify_peer=False
+        )
         try:
             async with asyncio.timeout(timeout):
                 request = {

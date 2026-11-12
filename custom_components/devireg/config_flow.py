@@ -46,7 +46,8 @@ class DeviRegConfigFlow(ConfigFlow, domain=DOMAIN):
                 result = await pair(user_input[CONF_OTP], user_input[CONF_USER_NAME])
             except InvalidOtp:
                 errors["base"] = "invalid_otp"
-            except CannotConnect:
+            except CannotConnect as err:
+                _LOGGER.warning("Pairing failed: %s", err)
                 errors["base"] = "cannot_connect"
             except DeviRegError:
                 errors["base"] = "no_thermostats"
