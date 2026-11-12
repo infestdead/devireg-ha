@@ -22,15 +22,20 @@ Things to know:
 - Pairing creates a key that lives only in Home Assistant's config entry. If
   you remove the integration, pair again with a new code.
 
-## Installation (HACS)
+## Installation
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=infestdead&repository=devireg-ha&category=integration)
 
-1. HACS > Integrations > ⋮ > Custom repositories, add this repo as *Integration*.
-2. Install **DEVIreg Smart** and restart Home Assistant.
-3. Settings > Devices & services > Add integration > **DEVIreg Smart**.
-4. In the DEVIsmart app, open Settings > Share house > Generate OTP, enter the
+1. Open **Marketplace** in Home Assistant 2026.11 or later (on older versions,
+   **HACS**), search for **DEVIreg Smart**, select **Download**, and restart
+   Home Assistant.
+2. Go to Settings > Devices & services > Add integration > **DEVIreg Smart**.
+3. In the DEVIsmart app, open Settings > Share house > Generate OTP, enter the
    code, and keep the app open until pairing finishes.
+
+If DEVIreg Smart doesn't show up in the search, add this repository as a
+custom repository (⋮ > Custom repositories, category *Integration*), then
+continue with step 1.
 
 ## Entities (per thermostat)
 
