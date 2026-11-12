@@ -13,6 +13,7 @@
     "error": {
       "invalid_otp": "The code was rejected or has expired. Generate a new one in the app and try again.",
       "cannot_connect": "Could not reach the Danfoss cloud relay.",
+      "app_closed": "The DEVIsmart app closed the connection before sending the house. Keep the app open on the Share house screen and try again with a new code.",
       "no_thermostats": "The shared house has no DEVIreg Smart thermostats.",
       "unknown": "Unexpected error"
     },

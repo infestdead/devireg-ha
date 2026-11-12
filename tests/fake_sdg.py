@@ -124,6 +124,23 @@ class FakeThermostat:
             pass
 
 
+class FakePhone(FakeThermostat):
+    """A DEVIsmart app that reads the house request and then hangs up."""
+
+    def __init__(self):
+        super().__init__(b"")
+
+    async def handle(self, reader, writer) -> None:
+        tunnel = ServerTunnel(reader, writer, self.keypair)
+        frame = await tunnel.frame()
+        assert frame[0] == 0  # MSG_FORWARD_REMOTE
+        tunnel.write_frame(b"\x02" + proto.encode([(1, proto.LENGTH, "Mdg-NaCl/binary")]))
+        await tunnel.handshake()
+        self.received.append(await tunnel.recv())
+        self.got_data.set()
+        writer.close()
+
+
 class FakeGrid:
     """A grid server that forwards CALL_REMOTE to one fake thermostat."""
 

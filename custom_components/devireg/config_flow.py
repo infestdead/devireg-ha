@@ -9,7 +9,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
-from .api import CannotConnect, DeviRegError, InvalidOtp, pair
+from .api import AppClosedConnection, CannotConnect, DeviRegError, InvalidOtp, pair
 from .const import (
     CONF_HOUSE_NAME,
     CONF_NAME,
@@ -46,6 +46,9 @@ class DeviRegConfigFlow(ConfigFlow, domain=DOMAIN):
                 result = await pair(user_input[CONF_OTP], user_input[CONF_USER_NAME])
             except InvalidOtp:
                 errors["base"] = "invalid_otp"
+            except AppClosedConnection as err:
+                _LOGGER.warning("Pairing failed: %s (%s)", err, err.__cause__)
+                errors["base"] = "app_closed"
             except CannotConnect as err:
                 _LOGGER.warning("Pairing failed: %s", err)
                 errors["base"] = "cannot_connect"

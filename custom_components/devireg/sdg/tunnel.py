@@ -23,7 +23,7 @@ from nacl.bindings import (
 from nacl.exceptions import CryptoError
 
 from . import proto
-from .errors import PeerTimeout, ProtocolError, SDGError
+from .errors import ConnectionClosed, PeerTimeout, ProtocolError, SDGError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,8 +110,11 @@ class Tunnel:
     # Framing
 
     async def _read_frame(self) -> bytes:
-        header = await self._reader.readexactly(2)
-        return await self._reader.readexactly(int.from_bytes(header, "big"))
+        try:
+            header = await self._reader.readexactly(2)
+            return await self._reader.readexactly(int.from_bytes(header, "big"))
+        except (asyncio.IncompleteReadError, ConnectionResetError) as err:
+            raise ConnectionClosed("Peer closed the connection") from err
 
     def _write_frame(self, content: bytes) -> None:
         self._writer.write(len(content).to_bytes(2, "big") + content)

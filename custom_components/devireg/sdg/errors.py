@@ -17,5 +17,9 @@ class PeerTimeout(SDGError):
     """The grid could not reach the peer (offline, or too many connections)."""
 
 
+class ConnectionClosed(SDGError):
+    """The remote side closed the connection."""
+
+
 class PairingFailed(SDGError):
     """Pairing challenge-response verification failed."""

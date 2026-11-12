@@ -7,6 +7,7 @@ not affiliated with or endorsed by Danfoss or Trifork.
 """
 
 from .errors import (
+    ConnectionClosed,
     ConnectionRefused,
     PairingFailed,
     PeerTimeout,
@@ -18,6 +19,7 @@ from .tunnel import Tunnel
 
 __all__ = [
     "DANFOSS_SERVERS",
+    "ConnectionClosed",
     "ConnectionRefused",
     "Grid",
     "PairingFailed",

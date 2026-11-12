@@ -15,7 +15,7 @@ from typing import Any
 
 from . import dominion
 from .dominion import Code, ControlMode, ControlState
-from .sdg import Grid, SDGError, generate_private_key
+from .sdg import ConnectionClosed, Grid, SDGError, generate_private_key
 from .sdg.grid import PROTOCOL_DOMINION
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,6 +31,10 @@ class DeviRegError(Exception):
 
 class CannotConnect(DeviRegError):
     """The SDG grid could not be reached."""
+
+
+class AppClosedConnection(CannotConnect):
+    """The DEVIsmart app closed the connection before sending the house."""
 
 
 class InvalidOtp(DeviRegError):
@@ -103,6 +107,10 @@ async def pair(
             raise InvalidOtp(str(err)) from err
         try:
             config = await grid.fetch_house_config(phone_id, user_name)
+        except ConnectionClosed as err:
+            raise AppClosedConnection(
+                "The DEVIsmart app closed the connection before sending the house"
+            ) from err
         except (OSError, TimeoutError, SDGError) as err:
             raise CannotConnect(f"Could not receive the house from the app: {err}") from err
     finally:

@@ -15,7 +15,7 @@ from custom_components.devireg.dominion import Code, ControlState
 from custom_components.devireg.sdg import Grid, ProtocolError, generate_private_key, proto
 from custom_components.devireg.sdg.crypto import xsalsa20_xor
 
-from .fake_sdg import FakeGrid, FakeThermostat
+from .fake_sdg import FakeGrid, FakePhone, FakeThermostat
 
 
 def test_xsalsa20_matches_libsodium() -> None:
@@ -128,4 +128,28 @@ async def test_connect_to_peer_rejects_wrong_key(socket_enabled) -> None:
         tunnel.close()
     finally:
         await client.close()
+        await grid.stop()
+
+
+async def test_pair_reports_app_closing_the_connection(socket_enabled, monkeypatch) -> None:
+    """The app hanging up instead of sending the house is a clear pairing error."""
+    import json
+
+    from custom_components.devireg.api import AppClosedConnection, pair
+
+    phone = FakePhone()
+    grid = FakeGrid(phone)
+    servers = await grid.start()
+
+    async def paired(self, otp, timeout=60):
+        return bytes.fromhex(phone.peer_id)
+
+    monkeypatch.setattr(Grid, "pair_remote", paired)
+    try:
+        with pytest.raises(AppClosedConnection):
+            await pair("123-456-789", "HA", servers)
+        request = json.loads(phone.received[0])
+        assert request["phoneName"] == "HA"
+        assert request["chunkedMessage"] is True
+    finally:
         await grid.stop()

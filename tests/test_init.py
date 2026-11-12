@@ -55,6 +55,23 @@ async def test_config_flow_bad_otp(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "invalid_otp"}
 
 
+async def test_config_flow_app_closed(hass: HomeAssistant) -> None:
+    from custom_components.devireg.api import AppClosedConnection
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.devireg.config_flow.pair",
+        side_effect=AppClosedConnection("closed"),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"otp": "123-456-789", "user_name": "HA"}
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "app_closed"}
+
+
 async def test_setup_creates_entities(hass: HomeAssistant, socket_enabled) -> None:
     initial = (
         _packet(Code.HEATING_TEMPERATURE_ROOM, (2150).to_bytes(2, "little"))

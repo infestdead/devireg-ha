@@ -16,7 +16,7 @@ from nacl.bindings import crypto_scalarmult, crypto_scalarmult_base
 
 from . import proto
 from .crypto import xsalsa20_xor
-from .errors import ConnectionRefused, PairingFailed, ProtocolError, SDGError
+from .errors import ConnectionClosed, ConnectionRefused, PairingFailed, ProtocolError, SDGError
 from .tunnel import DEFAULT_TIMEOUT, PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, Tunnel
 
 _LOGGER = logging.getLogger(__name__)
@@ -326,17 +326,33 @@ class Grid:
                     "phonePublicKey": self._pk.hex(),
                     "chunkedMessage": True,
                 }
-                await tunnel.send(json.dumps(request).encode())
+                # Compact, like OpenSDG sends it
+                payload = json.dumps(request, separators=(",", ":")).encode()
+                _LOGGER.debug(
+                    "Requesting house configuration (%d bytes, fields %s)",
+                    len(payload),
+                    sorted(request),
+                )
+                await tunnel.send(payload)
 
-                data = await tunnel.recv()
-                total = len(data)
-                # Chunked mode: first packet starts with int 0 and the total
-                # length (little-endian), so it cannot be mistaken for JSON.
-                if len(data) > 8 and data[:4] == bytes(4):
-                    total = int.from_bytes(data[4:8], "little")
-                    data = data[8:]
-                while len(data) < total:
-                    data += await tunnel.recv()
+                data = b""
+                try:
+                    data = await tunnel.recv()
+                    _LOGGER.debug("Received %d bytes from the app", len(data))
+                    total = len(data)
+                    # Chunked mode: first packet starts with int 0 and the total
+                    # length (little-endian), so it cannot be mistaken for JSON.
+                    if len(data) > 8 and data[:4] == bytes(4):
+                        total = int.from_bytes(data[4:8], "little")
+                        data = data[8:]
+                        _LOGGER.debug("House configuration is %d bytes, chunked", total)
+                    while len(data) < total:
+                        chunk = await tunnel.recv()
+                        _LOGGER.debug("Received chunk of %d bytes", len(chunk))
+                        data += chunk
+                except ConnectionClosed:
+                    _LOGGER.debug("The app closed the connection after %d bytes", len(data))
+                    raise
                 return json.loads(data[:total].decode())
         finally:
             tunnel.close()
