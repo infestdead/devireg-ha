@@ -8,6 +8,7 @@ prove compatibility with Danfoss's servers.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 
 from nacl.bindings import (
@@ -125,10 +126,16 @@ class FakeThermostat:
 
 
 class FakePhone(FakeThermostat):
-    """A DEVIsmart app that reads the house request and then hangs up."""
+    """A DEVIsmart app that reads the house request and then hangs up.
 
-    def __init__(self):
+    With a house, it hangs up only on the first hang_ups requests and then
+    answers with the house in chunked form.
+    """
+
+    def __init__(self, house: dict | None = None, hang_ups: int = 0):
         super().__init__(b"")
+        self.house = house
+        self.hang_ups = hang_ups
 
     async def handle(self, reader, writer) -> None:
         tunnel = ServerTunnel(reader, writer, self.keypair)
@@ -138,6 +145,11 @@ class FakePhone(FakeThermostat):
         await tunnel.handshake()
         self.received.append(await tunnel.recv())
         self.got_data.set()
+        if self.house is not None and len(self.received) > self.hang_ups:
+            body = json.dumps(self.house).encode()
+            await tunnel.send(bytes(4) + len(body).to_bytes(4, "little") + body[:10])
+            await tunnel.send(body[10:])
+            await writer.drain()
         writer.close()
 
 
@@ -149,6 +161,7 @@ class FakeGrid:
         self.thermostat = thermostat
         self.calls: list[dict] = []
         self.pings = 0
+        self.refuse_calls = 0
 
     async def start(self) -> list[tuple[str, int]]:
         self._grid = await asyncio.start_server(self.handle, "127.0.0.1", 0)
@@ -175,6 +188,10 @@ class FakeGrid:
                     await tunnel.send(b"\x05" + proto.encode([(1, proto.VARINT, fields[1])]))
                 elif msg_type == 10:  # CALL_REMOTE
                     self.calls.append(fields)
+                    if len(self.calls) <= self.refuse_calls:
+                        reply = proto.encode([(1, proto.VARINT, fields[1]), (2, proto.VARINT, 1)])
+                        await tunnel.send(b"\x0b" + reply)
+                        continue
                     server = proto.encode([(1, proto.LENGTH, "127.0.0.1"), (2, proto.VARINT, self.relay_port)])
                     peer = proto.encode([(3, proto.LENGTH, fields[2]), (4, proto.LENGTH, server), (5, proto.LENGTH, b"tunnel")])
                     reply = proto.encode([(1, proto.VARINT, fields[1]), (2, proto.VARINT, 0), (3, proto.LENGTH, peer)])

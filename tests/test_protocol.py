@@ -13,6 +13,7 @@ from custom_components.devireg import dominion
 from custom_components.devireg.api import DeviRegHouse, Room
 from custom_components.devireg.dominion import Code, ControlState
 from custom_components.devireg.sdg import Grid, ProtocolError, generate_private_key, proto
+from custom_components.devireg.sdg import grid as grid_module
 from custom_components.devireg.sdg.crypto import xsalsa20_xor
 
 from .fake_sdg import FakeGrid, FakePhone, FakeThermostat
@@ -131,6 +132,74 @@ async def test_connect_to_peer_rejects_wrong_key(socket_enabled) -> None:
         await grid.stop()
 
 
+HOUSE = {"houseName": "Flat", "rooms": [{"peerId": "AB" * 32, "roomName": "Bath"}]}
+
+
+def _fake_pairing(monkeypatch, phone: FakePhone) -> None:
+    """Skip the OTP step and the waits between config attempts."""
+
+    async def paired(self, otp, timeout=60):
+        return bytes.fromhex(phone.peer_id)
+
+    monkeypatch.setattr(Grid, "pair_remote", paired)
+    monkeypatch.setattr(grid_module, "CONFIG_RETRY_DELAYS", (0, 0, 0, 0))
+
+
+async def test_pair_retries_when_the_app_hangs_up(socket_enabled, monkeypatch) -> None:
+    """The app hanging up on the first requests is retried with the same key."""
+    from custom_components.devireg.api import pair
+
+    phone = FakePhone(HOUSE, hang_ups=2)
+    grid = FakeGrid(phone)
+    servers = await grid.start()
+    _fake_pairing(monkeypatch, phone)
+    key = generate_private_key()
+    try:
+        result = await pair("123-456-789", "HA", servers, private_key=key)
+        assert result.house_name == "Flat"
+        assert [room.peer_id for room in result.rooms] == ["ab" * 32]
+        assert result.private_key == key.hex()
+        assert len(phone.received) == 3
+    finally:
+        await grid.stop()
+
+
+async def test_pair_retries_when_the_relay_refuses(socket_enabled, monkeypatch) -> None:
+    """A refused CALL_REMOTE right after pairing is retried."""
+    from custom_components.devireg.api import pair
+
+    phone = FakePhone(HOUSE)
+    grid = FakeGrid(phone)
+    grid.refuse_calls = 3
+    servers = await grid.start()
+    _fake_pairing(monkeypatch, phone)
+    try:
+        result = await pair("123-456-789", "HA", servers)
+        assert result.house_name == "Flat"
+        assert len(grid.calls) == 4
+        assert len(phone.received) == 1
+    finally:
+        await grid.stop()
+
+
+async def test_pair_gives_up_when_the_relay_always_refuses(socket_enabled, monkeypatch) -> None:
+    from custom_components.devireg.api import AppClosedConnection, CannotConnect, pair
+
+    phone = FakePhone(HOUSE)
+    grid = FakeGrid(phone)
+    grid.refuse_calls = 100
+    servers = await grid.start()
+    _fake_pairing(monkeypatch, phone)
+    try:
+        with pytest.raises(CannotConnect) as err:
+            await pair("123-456-789", "HA", servers)
+        assert not isinstance(err.value, AppClosedConnection)
+        assert "refused" in str(err.value)
+        assert len(grid.calls) == len(grid_module.CONFIG_RETRY_DELAYS) + 1
+    finally:
+        await grid.stop()
+
+
 async def test_pair_reports_app_closing_the_connection(socket_enabled, monkeypatch) -> None:
     """The app hanging up instead of sending the house is a clear pairing error."""
     import json
@@ -140,14 +209,12 @@ async def test_pair_reports_app_closing_the_connection(socket_enabled, monkeypat
     phone = FakePhone()
     grid = FakeGrid(phone)
     servers = await grid.start()
-
-    async def paired(self, otp, timeout=60):
-        return bytes.fromhex(phone.peer_id)
-
-    monkeypatch.setattr(Grid, "pair_remote", paired)
+    _fake_pairing(monkeypatch, phone)
     try:
         with pytest.raises(AppClosedConnection):
             await pair("123-456-789", "HA", servers)
+        # Tried every time, then gave up
+        assert len(phone.received) == len(grid_module.CONFIG_RETRY_DELAYS) + 1
         request = json.loads(phone.received[0])
         assert request["phoneName"] == "HA"
         assert request["chunkedMessage"] is True

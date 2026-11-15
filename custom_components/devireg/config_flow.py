@@ -20,7 +20,7 @@ from .const import (
     CONF_USER_NAME,
     DOMAIN,
 )
-from .sdg import public_key
+from .sdg import generate_private_key, public_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,13 +37,22 @@ class DeviRegConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        # One key for every attempt in this flow, so the app sees the same
+        # client when the user tries again with a fresh code
+        self._private_key = generate_private_key()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                result = await pair(user_input[CONF_OTP], user_input[CONF_USER_NAME])
+                result = await pair(
+                    user_input[CONF_OTP],
+                    user_input[CONF_USER_NAME],
+                    private_key=self._private_key,
+                )
             except InvalidOtp:
                 errors["base"] = "invalid_otp"
             except AppClosedConnection as err:
@@ -66,7 +75,7 @@ class DeviRegConfigFlow(ConfigFlow, domain=DOMAIN):
                 if any(room.peer_id in configured for room in result.rooms):
                     return self.async_abort(reason="already_configured")
 
-                # Each pairing creates a new key, so the key identifies this entry
+                # Each config flow creates a new key, so the key identifies this entry
                 our_id = public_key(bytes.fromhex(result.private_key)).hex()
                 await self.async_set_unique_id(our_id)
                 return self.async_create_entry(

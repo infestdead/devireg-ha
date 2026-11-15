@@ -49,6 +49,10 @@ MIN_OTP_LENGTH = 7
 PROTOCOL_DOMINION = "dominion-1.0"
 PROTOCOL_CONFIGURATION = "dominion-configuration-1.0"
 
+# Waits between attempts to fetch the house from the phone. Right after
+# pairing the relay or the app often turns the first call down.
+CONFIG_RETRY_DELAYS = (1, 2, 3, 4)
+
 
 def generate_private_key() -> bytes:
     """Create a new long-term Curve25519 secret key."""
@@ -312,7 +316,43 @@ class Grid:
     async def fetch_house_config(
         self, phone_id: bytes, user_name: str, timeout: float = 60
     ) -> dict[str, Any]:
-        """Ask the paired phone to share its house configuration."""
+        """Ask the paired phone to share its house configuration.
+
+        Retried when the relay refuses the call or the app hangs up, all
+        within the overall timeout. The last such error is raised if every
+        attempt fails.
+        """
+        attempts = len(CONFIG_RETRY_DELAYS) + 1
+        deadline = asyncio.get_running_loop().time() + timeout
+        last_err: SDGError | None = None
+        for attempt in range(1, attempts + 1):
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            _LOGGER.debug("Fetching house configuration, attempt %d of %d", attempt, attempts)
+            try:
+                async with asyncio.timeout(remaining):
+                    return await self._fetch_house_config_once(phone_id, user_name)
+            except (ConnectionRefused, ConnectionClosed) as err:
+                last_err = err
+                _LOGGER.debug("Attempt %d failed: %s", attempt, err)
+            except TimeoutError:
+                if last_err is not None:
+                    raise last_err from None
+                raise
+            if attempt < attempts:
+                delay = CONFIG_RETRY_DELAYS[attempt - 1]
+                if asyncio.get_running_loop().time() + delay >= deadline:
+                    break
+                await asyncio.sleep(delay)
+        if last_err is None:
+            raise TimeoutError("Timed out fetching the house configuration")
+        raise last_err
+
+    async def _fetch_house_config_once(
+        self, phone_id: bytes, user_name: str
+    ) -> dict[str, Any]:
+        """One attempt at fetching the house configuration."""
         # The phone does not present the key it paired with on this tunnel
         # (issue #1), so it cannot be checked like a thermostat. The pairing
         # itself was verified with the OTP.
@@ -320,40 +360,39 @@ class Grid:
             phone_id, PROTOCOL_CONFIGURATION, verify_peer=False
         )
         try:
-            async with asyncio.timeout(timeout):
-                request = {
-                    "phoneName": user_name,
-                    "phonePublicKey": self._pk.hex(),
-                    "chunkedMessage": True,
-                }
-                # Compact, like OpenSDG sends it
-                payload = json.dumps(request, separators=(",", ":")).encode()
-                _LOGGER.debug(
-                    "Requesting house configuration (%d bytes, fields %s)",
-                    len(payload),
-                    sorted(request),
-                )
-                await tunnel.send(payload)
+            request = {
+                "phoneName": user_name,
+                "phonePublicKey": self._pk.hex(),
+                "chunkedMessage": True,
+            }
+            # Compact, like OpenSDG sends it
+            payload = json.dumps(request, separators=(",", ":")).encode()
+            _LOGGER.debug(
+                "Requesting house configuration (%d bytes, fields %s)",
+                len(payload),
+                sorted(request),
+            )
+            await tunnel.send(payload)
 
-                data = b""
-                try:
-                    data = await tunnel.recv()
-                    _LOGGER.debug("Received %d bytes from the app", len(data))
-                    total = len(data)
-                    # Chunked mode: first packet starts with int 0 and the total
-                    # length (little-endian), so it cannot be mistaken for JSON.
-                    if len(data) > 8 and data[:4] == bytes(4):
-                        total = int.from_bytes(data[4:8], "little")
-                        data = data[8:]
-                        _LOGGER.debug("House configuration is %d bytes, chunked", total)
-                    while len(data) < total:
-                        chunk = await tunnel.recv()
-                        _LOGGER.debug("Received chunk of %d bytes", len(chunk))
-                        data += chunk
-                except ConnectionClosed:
-                    _LOGGER.debug("The app closed the connection after %d bytes", len(data))
-                    raise
-                return json.loads(data[:total].decode())
+            data = b""
+            try:
+                data = await tunnel.recv()
+                _LOGGER.debug("Received %d bytes from the app", len(data))
+                total = len(data)
+                # Chunked mode: first packet starts with int 0 and the total
+                # length (little-endian), so it cannot be mistaken for JSON.
+                if len(data) > 8 and data[:4] == bytes(4):
+                    total = int.from_bytes(data[4:8], "little")
+                    data = data[8:]
+                    _LOGGER.debug("House configuration is %d bytes, chunked", total)
+                while len(data) < total:
+                    chunk = await tunnel.recv()
+                    _LOGGER.debug("Received chunk of %d bytes", len(chunk))
+                    data += chunk
+            except ConnectionClosed:
+                _LOGGER.debug("The app closed the connection after %d bytes", len(data))
+                raise
+            return json.loads(data[:total].decode())
         finally:
             tunnel.close()
 

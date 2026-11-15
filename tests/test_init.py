@@ -72,6 +72,41 @@ async def test_config_flow_app_closed(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "app_closed"}
 
 
+async def test_config_flow_reuses_key_across_attempts(hass: HomeAssistant) -> None:
+    """Every attempt in one flow pairs with the same key, and the entry keeps it."""
+    from custom_components.devireg.api import AppClosedConnection
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    keys: list[bytes] = []
+
+    async def fake_pair(otp, user_name, servers=None, private_key=None):
+        keys.append(private_key)
+        if len(keys) == 1:
+            raise AppClosedConnection("closed")
+        return PairingResult(
+            private_key=private_key.hex(),
+            house_name="My Flat",
+            rooms=[Room("ab" * 32, "Bathroom")],
+        )
+
+    with (
+        patch("custom_components.devireg.config_flow.pair", side_effect=fake_pair),
+        patch("custom_components.devireg.async_setup_entry", return_value=True),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"otp": "123-456-789", "user_name": "HA"}
+        )
+        assert result["errors"] == {"base": "app_closed"}
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"otp": "987-654-321", "user_name": "HA"}
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert keys[0] is not None and keys[0] == keys[1]
+    assert result["data"]["private_key"] == keys[0].hex()
+
+
 async def test_setup_creates_entities(hass: HomeAssistant, socket_enabled) -> None:
     initial = (
         _packet(Code.HEATING_TEMPERATURE_ROOM, (2150).to_bytes(2, "little"))

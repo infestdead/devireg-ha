@@ -88,10 +88,18 @@ class PairingResult:
 
 
 async def pair(
-    otp: str, user_name: str, servers: list[tuple[str, int]] | None = None
+    otp: str,
+    user_name: str,
+    servers: list[tuple[str, int]] | None = None,
+    private_key: bytes | None = None,
 ) -> PairingResult:
-    """Pair with the DEVIsmart app using a 'Share house' one-time code."""
-    private_key = generate_private_key()
+    """Pair with the DEVIsmart app using a 'Share house' one-time code.
+
+    Pass the same private_key when retrying with a new code, like the app
+    expects from one client. A new key is made when none is given.
+    """
+    if private_key is None:
+        private_key = generate_private_key()
     grid = Grid(private_key, servers)
     try:
         await grid.connect()
