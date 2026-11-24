@@ -57,7 +57,7 @@ class DeviRegConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_otp"
             except AppClosedConnection as err:
                 _LOGGER.warning("Pairing failed: %s (%s)", err, err.__cause__)
-                errors["base"] = "app_closed"
+                errors["base"] = "app_refused"
             except CannotConnect as err:
                 _LOGGER.warning("Pairing failed: %s", err)
                 errors["base"] = "cannot_connect"

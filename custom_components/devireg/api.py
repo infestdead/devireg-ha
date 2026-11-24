@@ -15,7 +15,7 @@ from typing import Any
 
 from . import dominion
 from .dominion import Code, ControlMode, ControlState
-from .sdg import ConnectionClosed, Grid, SDGError, generate_private_key
+from .sdg import ConnectionClosed, ConnectionRefused, Grid, SDGError, generate_private_key
 from .sdg.grid import PROTOCOL_DOMINION
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +34,10 @@ class CannotConnect(DeviRegError):
 
 
 class AppClosedConnection(CannotConnect):
-    """The DEVIsmart app closed the connection before sending the house."""
+    """The DEVIsmart app did not send the house after pairing.
+
+    It either closed the connection or could no longer be called.
+    """
 
 
 class InvalidOtp(DeviRegError):
@@ -87,6 +90,16 @@ class PairingResult:
     rooms: list[Room]
 
 
+def _log_config_failure(grid: Grid) -> None:
+    """Summarise why fetching the house failed, for bug reports."""
+    calls = ", ".join(f"{peer[:8]}… ({protocol})" for peer, protocol in grid.incoming_calls)
+    _LOGGER.warning(
+        "Fetching the house failed. Attempts: %s. Calls from the app: %s",
+        "; ".join(grid.config_errors) or "none",
+        calls or "none",
+    )
+
+
 async def pair(
     otp: str,
     user_name: str,
@@ -115,11 +128,13 @@ async def pair(
             raise InvalidOtp(str(err)) from err
         try:
             config = await grid.fetch_house_config(phone_id, user_name)
-        except ConnectionClosed as err:
+        except (ConnectionClosed, ConnectionRefused) as err:
+            _log_config_failure(grid)
             raise AppClosedConnection(
-                "The DEVIsmart app closed the connection before sending the house"
+                f"The DEVIsmart app did not send the house: {err}"
             ) from err
         except (OSError, TimeoutError, SDGError) as err:
+            _log_config_failure(grid)
             raise CannotConnect(f"Could not receive the house from the app: {err}") from err
     finally:
         await grid.close()

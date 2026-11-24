@@ -183,7 +183,7 @@ async def test_pair_retries_when_the_relay_refuses(socket_enabled, monkeypatch) 
 
 
 async def test_pair_gives_up_when_the_relay_always_refuses(socket_enabled, monkeypatch) -> None:
-    from custom_components.devireg.api import AppClosedConnection, CannotConnect, pair
+    from custom_components.devireg.api import AppClosedConnection, pair
 
     phone = FakePhone(HOUSE)
     grid = FakeGrid(phone)
@@ -191,11 +191,33 @@ async def test_pair_gives_up_when_the_relay_always_refuses(socket_enabled, monke
     servers = await grid.start()
     _fake_pairing(monkeypatch, phone)
     try:
-        with pytest.raises(CannotConnect) as err:
+        # The app stopped listening, which is reported like the app hanging up
+        with pytest.raises(AppClosedConnection) as err:
             await pair("123-456-789", "HA", servers)
-        assert not isinstance(err.value, AppClosedConnection)
         assert "refused" in str(err.value)
         assert len(grid.calls) == len(grid_module.CONFIG_RETRY_DELAYS) + 1
+    finally:
+        await grid.stop()
+
+
+async def test_incoming_call_is_ignored_and_reported(socket_enabled, monkeypatch, caplog) -> None:
+    """A call from the app is not refused, and shows up in the failure log."""
+    from custom_components.devireg.api import AppClosedConnection, pair
+
+    phone = FakePhone()
+    grid = FakeGrid(phone)
+    grid.call_back_protocol = "dominion-configuration-1.0"
+    servers = await grid.start()
+    _fake_pairing(monkeypatch, phone)
+    try:
+        with pytest.raises(AppClosedConnection):
+            await pair("123-456-789", "HA", servers)
+        assert grid.call_replies == []
+        assert "Incoming call from " + phone.peer_id[:8] in caplog.text
+        summary = [r.getMessage() for r in caplog.records if "Fetching the house failed" in r.getMessage()]
+        assert len(summary) == 1
+        assert "Peer closed the connection" in summary[0]
+        assert f"{phone.peer_id[:8]}… (dominion-configuration-1.0)" in summary[0]
     finally:
         await grid.stop()
 

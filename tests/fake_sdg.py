@@ -162,6 +162,9 @@ class FakeGrid:
         self.calls: list[dict] = []
         self.pings = 0
         self.refuse_calls = 0
+        # When set, the phone calls the client back with this protocol on CALL_REMOTE
+        self.call_back_protocol: str | None = None
+        self.call_replies: list[dict] = []
 
     async def start(self) -> list[tuple[str, int]]:
         self._grid = await asyncio.start_server(self.handle, "127.0.0.1", 0)
@@ -186,8 +189,20 @@ class FakeGrid:
                 elif msg_type == 4:  # PING
                     self.pings += 1
                     await tunnel.send(b"\x05" + proto.encode([(1, proto.VARINT, fields[1])]))
+                elif msg_type == 13:  # INCOMING_CALL_REPLY
+                    self.call_replies.append(fields)
                 elif msg_type == 10:  # CALL_REMOTE
                     self.calls.append(fields)
+                    if self.call_back_protocol is not None:
+                        caller = proto.encode([(3, proto.LENGTH, self.thermostat.peer_id)])
+                        call = proto.encode(
+                            [
+                                (1, proto.VARINT, 7),
+                                (2, proto.LENGTH, caller),
+                                (3, proto.LENGTH, self.call_back_protocol),
+                            ]
+                        )
+                        await tunnel.send(b"\x0c" + call)
                     if len(self.calls) <= self.refuse_calls:
                         reply = proto.encode([(1, proto.VARINT, fields[1]), (2, proto.VARINT, 1)])
                         await tunnel.send(b"\x0b" + reply)

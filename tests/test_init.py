@@ -55,7 +55,7 @@ async def test_config_flow_bad_otp(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "invalid_otp"}
 
 
-async def test_config_flow_app_closed(hass: HomeAssistant) -> None:
+async def test_config_flow_app_refused(hass: HomeAssistant) -> None:
     from custom_components.devireg.api import AppClosedConnection
 
     result = await hass.config_entries.flow.async_init(
@@ -69,7 +69,7 @@ async def test_config_flow_app_closed(hass: HomeAssistant) -> None:
             result["flow_id"], {"otp": "123-456-789", "user_name": "HA"}
         )
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "app_closed"}
+    assert result["errors"] == {"base": "app_refused"}
 
 
 async def test_config_flow_reuses_key_across_attempts(hass: HomeAssistant) -> None:
@@ -98,7 +98,7 @@ async def test_config_flow_reuses_key_across_attempts(hass: HomeAssistant) -> No
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"otp": "123-456-789", "user_name": "HA"}
         )
-        assert result["errors"] == {"base": "app_closed"}
+        assert result["errors"] == {"base": "app_refused"}
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"otp": "987-654-321", "user_name": "HA"}
         )

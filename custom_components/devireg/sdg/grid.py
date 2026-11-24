@@ -106,6 +106,10 @@ class Grid:
         self._ping_delay: int | None = None
         self._last_ping = 0.0
         self._connected: asyncio.Future[None] | None = None
+        # Calls other peers made to us, as (peer ID, protocol)
+        self.incoming_calls: list[tuple[str, str]] = []
+        # Why each attempt of the last fetch_house_config failed
+        self.config_errors: list[str] = []
 
     @property
     def peer_id(self) -> bytes:
@@ -220,10 +224,21 @@ class Grid:
             if future and not future.done():
                 future.set_result(fields)
         elif msg_type == MSG_INCOMING_CALL:
-            # We are a client only, so reject incoming calls.
-            call_id = proto.decode(body).get(1, 0)
-            reply = proto.encode([(1, proto.VARINT, call_id), (2, proto.VARINT, 0)])
-            await self._send(MSG_INCOMING_CALL_REPLY, reply)
+            # Someone (normally the phone during pairing) calls us. OpenSDG
+            # refuses such calls, but opensdg_java, which pairs fine with
+            # the iOS app, ignores them without a reply. Do the same, and
+            # note the call so a failed pairing can report it (issue #2).
+            fields = proto.decode(body)
+            try:
+                peer = proto.decode(fields.get(2, b"")).get(3, b"")
+                peer_id = bytes(peer).decode(errors="replace")
+            except ValueError:
+                peer_id = ""
+            protocol = bytes(fields.get(3, b"")).decode(errors="replace")
+            self.incoming_calls.append((peer_id, protocol))
+            _LOGGER.info(
+                "Incoming call from %s… with protocol %s, ignored", peer_id[:8], protocol
+            )
         else:
             _LOGGER.debug("Unhandled grid message %s: %s", msg_type, body.hex())
 
@@ -325,6 +340,7 @@ class Grid:
         attempts = len(CONFIG_RETRY_DELAYS) + 1
         deadline = asyncio.get_running_loop().time() + timeout
         last_err: SDGError | None = None
+        self.config_errors = []
         for attempt in range(1, attempts + 1):
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
@@ -335,6 +351,7 @@ class Grid:
                     return await self._fetch_house_config_once(phone_id, user_name)
             except (ConnectionRefused, ConnectionClosed) as err:
                 last_err = err
+                self.config_errors.append(str(err))
                 _LOGGER.debug("Attempt %d failed: %s", attempt, err)
             except TimeoutError:
                 if last_err is not None:
